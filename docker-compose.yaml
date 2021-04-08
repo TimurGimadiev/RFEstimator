@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+
+  worker:
+    image: timurious/estimator:latest
+    depends_on:
+      - redis
+    links:
+      - redis
+    entrypoint: ["rq", "worker", "--url", "redis://redis:6379"]
+    deploy:
+      replicas: 6
+      placement:
+        max_replicas_per_node: 6
+      update_config:
+        parallelism: 6
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: always
+    volumes:
+      - esdata:/results
+    #command: ["redis-server", "--appendonly", "yes"]
+
+
+volumes:
+  esdata:
+    name: estimator-data
+

@@ -1,13 +1,13 @@
-# orca
+# Reaction Feasibility Estimator
 
 Estimate reaction feasibility by difference in energy between energy of reactants and products
 
 # Docker pull
-timurious/estimator:latest
+    timurious/estimator:latest
 
 # Docker build
 
-To buildand image:
+To build an image:
 
     docker build . -t estimator 
 
@@ -16,4 +16,4 @@ To buildand image:
 Prepare env file with REDIS_URL key valued by redis task server url.
 Run required amount of containers with next command:
 
-      docker run -d --rm --env-file /path/to/env/file estimator
+      docker run -d --rm --env REDIS_URL=redis://ip estimator

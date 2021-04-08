@@ -19,6 +19,6 @@ RUN cd /opt && chmod +x boot.sh && chmod +x crest &&\
     pip3 --no-cache-dir install -e .
 USER nobody
 WORKDIR /data
-
+ENTRYPOINT ["/opt/boot.sh"]
 #RUN bash jchem_unix_21.4.sh
 
