@@ -14,7 +14,7 @@ services:
       placement:
         max_replicas_per_node: 6
       update_config:
-        parallelism: 6
+        parallelism: 2
         delay: 10s
       restart_policy:
         condition: on-failure
@@ -25,12 +25,53 @@ services:
     ports:
       - "6379:6379"
     restart: always
-    volumes:
-      - esdata:/results
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
     #command: ["redis-server", "--appendonly", "yes"]
 
+  dispatcher:
+    image: timurious/estimator:latest
+    depends_on:
+      - redis
+    links:
+      - redis
+    entrypoint: [ "python3", "-m", "Estimator.dispatcher" ]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - esinput:/data
 
+  listener:
+    image: timurious/estimator:latest
+    depends_on:
+      - redis
+    links:
+      - redis
+    entrypoint: [ "python3", "-m", "Estimator.listener" ]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - esdata:/data
+
+
+# change device for your data storages, map estimator-input to folder with input data.json file, results will be
+# stored in estimator-data mapped dir
 volumes:
   esdata:
     name: estimator-data
-
+    driver_opts:
+      type: none
+      o: bind
+      device: ${workdir}
+  esinput:
+    name: estimator-input
+    driver_opts:
+      type: none
+      o: bind
+      device: ${inputdir}

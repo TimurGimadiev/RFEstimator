@@ -28,27 +28,34 @@ from tempfile import mkdtemp
 from time import sleep, monotonic
 from pyscf import gto, scf
 from pyscf.geomopt.berny_solver import optimize
-from CGRtools import smiles
+from CGRtools import smiles, RDFRead
 from .utilities import best_conf
 from collections import namedtuple
 from time import time
+from io import StringIO
 
 ReactionComponents = namedtuple('ReactionComponents',
-                                ['reactants', 'products', 'energy_dif', 'comments', 'time_s'])
+                                ['index', 'smi', 'reactants', 'products', 'energy_dif', 'comments', 'time_s'])
+
 
 def spend_time(start):
     return time()-start
 
-def run(task, options=None, program='/opt/crest'):
+
+def run(index, smi=None, crest_speed="mquick", dft="None", program='/opt/crest'):
     start = time()
-    smi = task  #TO DO: accept RDF as alternative
-    reaction = smiles(smi)
+    print(smi)
+    if smi:
+        reaction = smiles(smi)
+    else:
+        # TO DO: accept RDF as alternative
+        raise NotImplemented
     # TO DO: add check for reaction container
     if reaction:
         if not reaction.reactants:
-            return ReactionComponents(None, None, None, 'problem: with reactants', spend_time(start))
+            return ReactionComponents(index, smi, None, None, None, 'problem: with reactants', spend_time(start))
         elif not reaction.products:
-            return ReactionComponents(None, None, None, 'problem: with products', spend_time(start))
+            return ReactionComponents(index, smi, None, None, None, 'problem: with products', spend_time(start))
         else:
             reactants = []
             products = []
@@ -59,8 +66,8 @@ def run(task, options=None, program='/opt/crest'):
                 if tmp:
                     reactants.append(tmp)
                 else:
-                    return ReactionComponents(None, None, None, f'anomaly terminated calculations for reactant {n}'
-                                              , spend_time(start))
+                    return ReactionComponents(index, smi, None, None, None,
+                                              f'anomaly terminated calculations for reactant {n}', spend_time(start))
             for n, mol in enumerate(reaction.products):
                 tdir = Path(mkdtemp(prefix='calculation_'))
                 tmp = best_conf(mol, tdir)
@@ -68,14 +75,14 @@ def run(task, options=None, program='/opt/crest'):
                 if tmp:
                     products.append(tmp)
                 else:
-                    return ReactionComponents(None, None, None, f'anomaly terminated calculations for product {n}'
-                                              , spend_time(start))
+                    return ReactionComponents(index, smi, None, None, None,
+                                              f'anomaly terminated calculations for product {n}', spend_time(start))
             energy_dif = sum([x[1] for x in products]) - sum([x[1] for x in reactants])
             result = ReactionComponents(reactants, products, energy_dif, 'terminated normally', spend_time(start))
             return result
     else:
-        return ReactionComponents(None, None, None, 'problem: reaction smiles empty or incorrect', spend_time(start))
-
+        return ReactionComponents(index, smi, None, None, None, 'problem: reaction smiles empty or incorrect',
+                                  spend_time(start))
 
 
 def worker(queue_in, queue_out):
@@ -90,8 +97,8 @@ def worker(queue_in, queue_out):
             queue_out.put(res)
 
 
-def rq_worker(job):
-    res = list(run(*job))
+def rq_worker(index, **kwargs):
+    res = list(run(index, **kwargs))
     return res
 
 
@@ -134,8 +141,8 @@ class RQueueWrapper:
         """
         return len(self.registry)
 
-    def put(self, job, *, result_ttl=3600, job_timeout=3600):
-        self.queue.enqueue(rq_worker, job, job_timeout=job_timeout, result_ttl=result_ttl)
+    def put(self, index, result_ttl=3600, job_timeout=3600, **kwargs):
+        self.queue.enqueue(rq_worker, index, **kwargs, job_timeout=job_timeout, result_ttl=result_ttl)
 
     def get(self, block=True, timeout=None, *, _sleep=2):
         if self.buffer:
