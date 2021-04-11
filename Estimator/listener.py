@@ -22,7 +22,7 @@ from redis import Redis
 import shelve
 
 
-def listener(host='redis', filename='results'):
+def listener(host='redis', filename='/data/results.shelve'):
     qin, qout = rq_launch(Redis(host=host))
     with shelve.open(filename) as w:
         while True:
@@ -31,6 +31,7 @@ def listener(host='redis', filename='results'):
             except AttributeError:
                 print("qout.get() error met")
                 continue
+            #print(data)
             w[str(data.index)] = data
 
 

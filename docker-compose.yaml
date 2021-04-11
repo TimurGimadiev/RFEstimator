@@ -6,13 +6,14 @@ services:
     image: timurious/estimator:latest
     depends_on:
       - redis
-    links:
-      - redis
+    networks:
+      - default
     entrypoint: ["rq", "worker", "--url", "redis://redis:6379"]
     deploy:
-      replicas: 6
-      placement:
-        max_replicas_per_node: 6
+      resources:
+        limits:
+          cpus: '1'
+      replicas: ${workers_n}
       update_config:
         parallelism: 2
         delay: 10s
@@ -30,48 +31,61 @@ services:
       restart_policy:
         condition: on-failure
     #command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - default
 
   dispatcher:
     image: timurious/estimator:latest
     depends_on:
       - redis
-    links:
-      - redis
     entrypoint: [ "python3", "-m", "Estimator.dispatcher" ]
     deploy:
       replicas: 1
+      placement:
+        constraints: [ node.role == manager ]
       restart_policy:
         condition: on-failure
     volumes:
-      - esinput:/data
+      - type: bind
+        source: ${inputdir}
+        target: /data
+    networks:
+      - default
 
   listener:
     image: timurious/estimator:latest
     depends_on:
       - redis
-    links:
-      - redis
     entrypoint: [ "python3", "-m", "Estimator.listener" ]
     deploy:
       replicas: 1
+      placement:
+        constraints: [ node.role == manager ]
       restart_policy:
         condition: on-failure
     volumes:
-      - esdata:/data
+      - type: bind
+        source: ${inputdir}
+        target: /data
+    networks:
+      - default
 
 
 # change device for your data storages, map estimator-input to folder with input data.json file, results will be
 # stored in estimator-data mapped dir
-volumes:
-  esdata:
-    name: estimator-data
-    driver_opts:
-      type: none
-      o: bind
-      device: ${workdir}
-  esinput:
-    name: estimator-input
-    driver_opts:
-      type: none
-      o: bind
-      device: ${inputdir}
+
+#  esdata:
+#    name: estimator-data
+#    driver_opts:
+#      type: none
+#      o: bind
+#      device: ${workdir}
+#  esinput:
+#    name: estimator-input
+#    driver_opts:
+#       type: volume
+#       source: ${inputdir}
+
+networks:
+  default:
+    name: redis_network

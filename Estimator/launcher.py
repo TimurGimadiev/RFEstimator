@@ -42,7 +42,23 @@ def spend_time(start):
     return time()-start
 
 
-def run(index, smi=None, crest_speed="mquick", dft="None", program='/opt/crest'):
+def run(index, smi=None, crest_speed="mquick", dft="None"):
+    """
+    perform calculations for one reaction
+    :param index:
+        index of the reaction, to keep tracking initial order of tasks
+    :param smi:
+        Reaction SMILES
+    :param crest_speed:
+        speed and precision of CREST calculations, possible options :
+        - quick
+        - squick
+        - mquick (default for this project)
+    :param dft:
+        define to perform
+    :return:
+        ReactionComponents named tuple
+    """
     start = time()
     print(smi)
     if smi:
@@ -60,9 +76,10 @@ def run(index, smi=None, crest_speed="mquick", dft="None", program='/opt/crest')
             reactants = []
             products = []
             for n, mol in enumerate(reaction.reactants):
+                #mol.explicify_hydrogens()
                 tdir = Path(mkdtemp(prefix='calculation_'))
                 tmp = best_conf(mol, tdir)
-                rmtree(tdir)
+                #rmtree(tdir)
                 if tmp:
                     reactants.append(tmp)
                 else:
@@ -77,9 +94,14 @@ def run(index, smi=None, crest_speed="mquick", dft="None", program='/opt/crest')
                 else:
                     return ReactionComponents(index, smi, None, None, None,
                                               f'anomaly terminated calculations for product {n}', spend_time(start))
-            energy_dif = sum([x[1] for x in products]) - sum([x[1] for x in reactants])
-            result = ReactionComponents(reactants, products, energy_dif, 'terminated normally', spend_time(start))
-            return result
+
+            try:
+                energy_dif = sum([x.min_energy for x in products]) - sum([x.min_energy for x in reactants])
+            except TypeError:
+                return ReactionComponents(index, smi, reactants, products,
+                                          None, 'min energy read error', spend_time(start))
+            return ReactionComponents(index, smi, reactants, products,
+                                      energy_dif, 'terminated normally', spend_time(start))
     else:
         return ReactionComponents(index, smi, None, None, None, 'problem: reaction smiles empty or incorrect',
                                   spend_time(start))
@@ -93,12 +115,12 @@ def worker(queue_in, queue_out):
     :param queue_out: queue of results of job.
     """
     for job in iter(queue_in.get, None):
-        for res in run(*job):
-            queue_out.put(res)
+        res = run(*job)
+        queue_out.put(index=res.index, result=res)
 
 
 def rq_worker(index, **kwargs):
-    res = list(run(index, **kwargs))
+    res = run(index, **kwargs)
     return res
 
 
@@ -144,9 +166,10 @@ class RQueueWrapper:
     def put(self, index, result_ttl=3600, job_timeout=3600, **kwargs):
         self.queue.enqueue(rq_worker, index, **kwargs, job_timeout=job_timeout, result_ttl=result_ttl)
 
+
     def get(self, block=True, timeout=None, *, _sleep=2):
-        if self.buffer:
-            return self.buffer.popleft()
+        #if self.buffer:
+        #    return self.buffer.popleft()
         if block:
             if timeout is None:
                 while True:
@@ -155,11 +178,11 @@ class RQueueWrapper:
                         job = self.queue.fetch_job(ids[0])
                         res = job.result
                         job.delete()
-                        if len(res) > 1:
-                            self.buffer.extend(res[1:])
-                            return res[0]
-                        elif res:
-                            return res[0]
+                        #if len(res) > 1:
+                        #    self.buffer.extend(res[1:])
+                        #    return res[0]
+                        #elif res:
+                        return res
                     sleep(_sleep)
             else:
                 deadline = monotonic() + timeout
@@ -169,11 +192,11 @@ class RQueueWrapper:
                         job = self.queue.fetch_job(ids[0])
                         res = job.result
                         job.delete()
-                        if len(res) > 1:
-                            self.buffer.extend(res[1:])
-                            return res[0]
-                        elif res:
-                            return res[0]
+                        #if len(res) > 1:
+                        #    self.buffer.extend(res[1:])
+                        #    return res[0]
+                        #elif res:
+                        return res
                     sleep(_sleep)
                     if deadline < monotonic():
                         raise Empty
@@ -183,11 +206,11 @@ class RQueueWrapper:
                 job = self.queue.fetch_job(ids[0])
                 res = job.result
                 job.delete()
-                if len(res) > 1:
-                    self.buffer.extend(res[1:])
-                    return res[0]
-                elif res:
-                    return res[0]
+                #if len(res) > 1:
+                #    self.buffer.extend(res[1:])
+                #    return res[0]
+                #elif res:
+                return res
             raise Empty
 
 

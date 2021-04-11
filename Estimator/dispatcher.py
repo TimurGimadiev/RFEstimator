@@ -27,21 +27,20 @@ keys = ["smi", "crest_speed", "DFT_functional", "DFT_basis"]
 
 
 def dispatcher(filename, host='redis', queued_tasks=100, queue_check_time=5, job_timeout=24*60*60, result_ttl=24*60*60):
-    with open(filename, 'rb') as f, open("loading.logs", "w") as log:
+    with open(filename, 'rb') as f, open("/data/loading.logs", "w") as log:
         j = bigjson.load(f)
-    qin, qout = rq_launch(Redis(host=host))
-    qin.queue.empty()  # reset previous queue
-    log.write("number of tasks loaded to queue")
-    for n, i in enumerate(j, start=1):  # RABOTAT NEGRY
-        if not n % queued_tasks:
-            log.write(f"{n} ")
-        if n % queued_tasks == 0:
-            print("started tasks", n)
-        while queued_tasks < qin.queue.count:
-            time.sleep(queue_check_time)
-
-        qin.put(**dict(i), index=n, job_timeout=job_timeout, result_ttl=result_ttl)
-    log.write(f"""Loading to queue complete, dispatcher stops at this point,\n
+        qin, qout = rq_launch(Redis(host=host))
+        qin.queue.empty()  # reset previous queue
+        log.write("number of tasks loaded to queue")
+        for n, i in enumerate(j, start=1):  # put tasks into queue
+            if not n % queued_tasks:
+                log.write(f"{n}\n")
+            if n % queued_tasks == 0:
+                print("started tasks", n)
+            while queued_tasks < qin.queue.count:
+                time.sleep(queue_check_time)
+            qin.put(**dict(i), index=n, job_timeout=job_timeout, result_ttl=result_ttl)
+        log.write(f"""Loading to queue complete, dispatcher stops at this point,\n
                 still there are about {qin.queue.count} tasks in Redis queue""")
 
 
