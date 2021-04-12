@@ -2,9 +2,9 @@
 #
 #  Copyright 2021 Timur Gimadiev <timur.gimadiev@gmail.com>
 #  Copyright 2021 Ramil Nugmanov <nougmanoff@protonmail.com>
-#  This file is part of OrcaLauncher.
+#  This file is part of Reaction Feasibility Estimator.
 #
-#  OrcaLauncher is free software; you can redistribute it and/or modify
+#  Reaction Feasibility Estimator is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation; either version 3 of the License, or
 #  (at your option) any later version.
@@ -29,7 +29,7 @@ from time import sleep, monotonic
 from pyscf import gto, scf
 from pyscf.geomopt.berny_solver import optimize
 from CGRtools import smiles, RDFRead
-from .utilities import best_conf
+from .utilities import best_conf, refine_dft, best_conformers
 from collections import namedtuple
 from time import time
 from io import StringIO
@@ -42,7 +42,7 @@ def spend_time(start):
     return time()-start
 
 
-def run(index, smi=None, crest_speed="mquick", dft="None"):
+def run(index, smi=None, **kwargs):
     """
     perform calculations for one reaction
     :param index:
@@ -73,28 +73,14 @@ def run(index, smi=None, crest_speed="mquick", dft="None"):
         elif not reaction.products:
             return ReactionComponents(index, smi, None, None, None, 'problem: with products', spend_time(start))
         else:
-            reactants = []
-            products = []
-            for n, mol in enumerate(reaction.reactants):
-                #mol.explicify_hydrogens()
-                tdir = Path(mkdtemp(prefix='calculation_'))
-                tmp = best_conf(mol, tdir)
-                #rmtree(tdir)
-                if tmp:
-                    reactants.append(tmp)
-                else:
-                    return ReactionComponents(index, smi, None, None, None,
-                                              f'anomaly terminated calculations for reactant {n}', spend_time(start))
-            for n, mol in enumerate(reaction.products):
-                tdir = Path(mkdtemp(prefix='calculation_'))
-                tmp = best_conf(mol, tdir)
-                rmtree(tdir)
-                if tmp:
-                    products.append(tmp)
-                else:
-                    return ReactionComponents(index, smi, None, None, None,
-                                              f'anomaly terminated calculations for product {n}', spend_time(start))
-
+            reactants = best_conformers(reaction.reactants, **kwargs)
+            if not reactants:
+                ReactionComponents(index, smi, None, None, None,
+                                   'anomaly terminated calculations for one of reactants', spend_time(start))
+            products = best_conformers(reaction.reactants, **kwargs)
+            if not products:
+                ReactionComponents(index, smi, None, None, None,
+                                   'anomaly terminated calculations for one of products', spend_time(start))
             try:
                 energy_dif = sum([x.min_energy for x in products]) - sum([x.min_energy for x in reactants])
             except TypeError:
