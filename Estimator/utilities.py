@@ -47,7 +47,7 @@ from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
 
-calc_result = namedtuple('calc_result', ['data', 'min_energy', 'log'])
+Calc_Result = namedtuple('Calc_Result', ['data', 'min_energy', 'log'])
 atom2numbers = {v: k for k, v in enumerate(common_isotopes, 1)}
 numbers2atom = {k: v for k, v in enumerate(common_isotopes, 1)}
 
@@ -65,6 +65,7 @@ def best_conformers(molecules, **kwargs):
             result.append(tmp)
         else:
             return
+    return result
 
 
 def best_conf(molecule, tdir, **kwargs):
@@ -93,12 +94,11 @@ def best_conf(molecule, tdir, **kwargs):
                 stderr=silent, cwd=tdir, text=True)
         lines = p.stdout.splitlines()
     if lines[-1] == ' CREST terminated normally.':
-        # print(lines[-18])
         flag = False
         min_energy = None
         try:
             min_energy = float(lines[-18].split(':')[1])  # different precision to one read from crest_best.xyz
-        except ValueError:
+        except ValueError or IndexError:
             flag = True
         with open(f'{tdir}/crest_best.xyz') as f:
             data = f.readlines()
@@ -108,12 +108,12 @@ def best_conf(molecule, tdir, **kwargs):
                 min_energy = float(data[1].split("energy:")[1].split()[0])
             except ValueError:
                 print("Unexpected min energy value both in xyz and log")
-        print(lines[-18].split(':')[1])
-        print(data[1])
+        # print(lines[-18].split(':')[1])  # NB different precision, round to e-5
+        # print(data[1])  # NB different precision e-8
         if log:
-            return calc_result(data, min_energy, lines)
+            return Calc_Result(data, min_energy, lines)
         else:
-            return calc_result(data, min_energy, None)
+            return Calc_Result(data, min_energy, None)
     else:
         return
 
@@ -126,9 +126,9 @@ def refine_dft(molecule, calc_result=None, **kwargs):
     charge = int(molecule)
     if calc_result:
         if dft.lower() == 'priroda':
-            refine_priroda(charge, multiplicity, calc_result, tdir=tdir, log=log)
+            return refine_priroda(charge, multiplicity, calc_result, tdir=tdir, log=log)
         elif dft.lower() == 'pyscf':
-            refine_pyscf(calc_result)
+            return NotImplemented #refine_pyscf(calc_result)
     else:
         raise NotImplemented
 
@@ -146,7 +146,7 @@ def refine_pyscf(calc_result):
 def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     if not tdir:
         tdir="/tmp/"
-    coord = [str(atom2numbers[x[:2].strip()]) + " " + x[3:] for x in calc_result.data[2:-1]]
+    coord = [str(atom2numbers[x[:2].strip()]) + " " + x[3:] for x in calc_result.data[2:]]
     priroda_input = f'''
     $system mem=1000 disk=-1000 path=/tmp $end
     $control
@@ -181,17 +181,18 @@ def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     else:
         if not flag:
             #print(p.stdout.splitlines())
-            return
+            return #p.stdout.splitlines()
     # coord = tmp[3:-2]
+    # print(tmp)
     at_count = len(coord)
-    energy = float(tmp[-2].split("=")[1])
-    coord = [numbers2atom[int(x.lstrip()[:3].strip())]+x.lstrip()[3:] for x in tmp[3:-2]]
+    energy = float(tmp[-1].split("=")[1])
+    coord = [numbers2atom[int(x.lstrip()[:3].strip())]+x.lstrip()[3:] for x in tmp[2:-2]]
     coord.insert(0, "\n")
     coord.insert(0, f"{at_count}\n")
     if log:
-        return calc_result(coord, energy, p.stdout.splitlines())
+        return Calc_Result(data=coord, min_energy=energy, log=p.stdout.splitlines())
     else:
-        return calc_result(coord, energy, None)
+        return Calc_Result(data=coord, min_energy=energy, log=None)
 
 
 __all__ = ['best_conf']
