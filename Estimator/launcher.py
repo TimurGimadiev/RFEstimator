@@ -29,7 +29,7 @@ from time import sleep, monotonic
 from pyscf import gto, scf
 from pyscf.geomopt.berny_solver import optimize
 from CGRtools import smiles, RDFRead
-from .utilities import best_conf, refine_dft, best_conformers
+from .utilities import best_conf, refine_dft, best_conformers, CalcResult, FailReport
 from collections import namedtuple
 from time import time
 from io import StringIO
@@ -76,11 +76,18 @@ def run(index, smi=None, **kwargs):
             reactants = best_conformers(reaction.reactants, **kwargs)
             if not reactants:
                 ReactionComponents(index, smi, None, None, None,
-                                   'anomaly terminated calculations for one of reactants', spend_time(start))
+                                   'anomaly terminated calculations for one of products', spend_time(start))
+            elif any(isinstance(x, FailReport) for x in reactants):
+                return reactants
+                # ReactionComponents(index, smi, None, None, None,
+                #                   'anomaly terminated calculations for one of reactants', spend_time(start))
             products = best_conformers(reaction.products, **kwargs)
             if not products:
                 ReactionComponents(index, smi, None, None, None,
                                    'anomaly terminated calculations for one of products', spend_time(start))
+            elif any(isinstance(x, FailReport) for x in products):
+                return products
+
             try:
                 energy_dif = sum([x.min_energy for x in products]) - sum([x.min_energy for x in reactants])
             except TypeError:

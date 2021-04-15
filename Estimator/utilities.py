@@ -47,7 +47,8 @@ from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
 
-Calc_Result = namedtuple('Calc_Result', ['data', 'min_energy', 'log'])
+CalcResult = namedtuple('CalcResult', ['data', 'min_energy', 'log'])
+FailReport = namedtuple('FailReport', ['initial', 'log', 'step'])
 atom2numbers = {v: k for k, v in enumerate(common_isotopes, 1)}
 numbers2atom = {k: v for k, v in enumerate(common_isotopes, 1)}
 
@@ -111,36 +112,47 @@ def best_conf(molecule, tdir, **kwargs):
         # print(lines[-18].split(':')[1])  # NB different precision, round to e-5
         # print(data[1])  # NB different precision e-8
         if log:
-            return Calc_Result(data, min_energy, lines)
+            return CalcResult(data, min_energy, lines)
         else:
-            return Calc_Result(data, min_energy, None)
+            return CalcResult(data, min_energy, None)
     else:
-        return
+        return FailReport(initial=molecule, log=p.stdout.splitlines(), step="priroda_dft")
 
 
 def refine_dft(molecule, calc_result=None, **kwargs):
     dft = kwargs.get('dft', 'priroda')
     log = kwargs.get('log')
-    tdir = kwargs.get('tdir', "/tmp/")
+    tdir = kwargs.get('tdir', "/tmp")
     multiplicity = 1  # multiplicity fixed for now, no radicals welcome
     charge = int(molecule)
     if calc_result:
         if dft.lower() == 'priroda':
             return refine_priroda(charge, multiplicity, calc_result, tdir=tdir, log=log)
         elif dft.lower() == 'pyscf':
-            return NotImplemented #refine_pyscf(calc_result)
+            return refine_pyscf(charge, multiplicity, calc_result, tdir=tdir, log=log)
+            #return FailReport(initial=calc_result, log="Not implemented", step='pyscf') # NotImplemented
     else:
         raise NotImplemented
 
-def refine_pyscf(calc_result):
+
+def refine_pyscf(charge, multiplicity, calc_result, tdir, log=None):
     from pyscf import gto, dft
     from pyscf.geomopt.berny_solver import optimize
-    mol = gto.M(atom="".join(calc_result.data[2:]), basis='cc-pVDZ')
-    mf = dft.RKS(mol)
-    mf.xcfun = "SCAN"
-    mf.xc = ""
-    mol_eq = optimize(mf)
-    print(mol_eq.atom_coords())
+    mol = gto.M(atom="".join(calc_result.data[2:]), basis='cc-pVDZ', output=f'{tdir}/my_log.txt', verbose=4,
+                charge=charge, spin=multiplicity-1)
+    mf = dft.RKS(mol, xc="B3LYP")
+    #mf.xcfun = "SCAN"
+    mol_opt = optimize(mf)
+    energy = dft.RKS(mol_opt, xc="B3LYP").kernel()
+    at_count = len(mol_opt.atom_coords())
+    coord = [f"{x[0]}    {x[1][0]}    {x[1][1]}    {x[1][2]}" for x in mol_opt.atom]
+    coord.insert(0, "")
+    coord.insert(0, f"{at_count}")
+    if log:
+        with open(f'{tdir}/my_log.txt') as f:
+            return CalcResult(data=coord, min_energy=energy, log=f.readlines())
+    else:
+        return CalcResult(data=coord, min_energy=energy, log=None)
 
 
 def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
@@ -154,6 +166,7 @@ def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     basis= /opt/priroda/basis/3z
     $end
     $grid accur=1e-8 $end
+    $scf procedure=bfgs $end
     $optimize
      steps=300
      tol=1e-5
@@ -181,18 +194,22 @@ def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     else:
         if not flag:
             #print(p.stdout.splitlines())
-            return #p.stdout.splitlines()
+            return FailReport(initial=priroda_input, log=p.stdout.splitlines(), step="priroda_dft")#p.stdout.splitlines()
     # coord = tmp[3:-2]
     # print(tmp)
     at_count = len(coord)
     energy = float(tmp[-1].split("=")[1])
-    coord = [numbers2atom[int(x.lstrip()[:3].strip())]+x.lstrip()[3:] for x in tmp[2:-2]]
-    coord.insert(0, "\n")
-    coord.insert(0, f"{at_count}\n")
+    #print(tmp)
+    #try:
+    coord = [numbers2atom[int(x.lstrip()[:3].strip())]+x.lstrip()[3:] for x in tmp[tmp.index('cartesian')+1:-2]]
+    #except:
+    #    return CalcResult(data=priroda_input, min_energy=energy, log=p.stdout.splitlines())
+    coord.insert(0, "")
+    coord.insert(0, f"{at_count}")
     if log:
-        return Calc_Result(data=coord, min_energy=energy, log=p.stdout.splitlines())
+        return CalcResult(data=coord, min_energy=energy, log=p.stdout.splitlines())
     else:
-        return Calc_Result(data=coord, min_energy=energy, log=None)
+        return CalcResult(data=coord, min_energy=energy, log=None)
 
 
 __all__ = ['best_conf']
