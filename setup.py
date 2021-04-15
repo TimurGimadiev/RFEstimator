@@ -30,7 +30,7 @@ setup(
     author='Dr. Timur Gimadiev',
     author_email='timur.gimadiev@gmail.com',
     python_requires='>=3.8.0',
-    install_requires=['rq>=1.5.2', 'redis', 'bigjson'],
+    install_requires=['rq>=1.5.2', 'redis', 'bigjson', 'cgrtools', 'pyberny', 'pyscf'],
     zip_safe=True,
     long_description=(Path(__file__).parent / 'README.md').read_text(),
     classifiers=['Environment :: Plugins',

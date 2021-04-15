@@ -168,7 +168,7 @@ def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     $grid accur=1e-8 $end
     $scf procedure=bfgs $end
     $optimize
-     steps=300
+     steps=500
      tol=1e-5
      trust=0.5
     $end
@@ -194,7 +194,7 @@ def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     else:
         if not flag:
             #print(p.stdout.splitlines())
-            return FailReport(initial=priroda_input, log=p.stdout.splitlines(), step="priroda_dft")#p.stdout.splitlines()
+            return FailReport(initial=priroda_input, log=p.stdout.splitlines(), step="priroda_dft not converged")
     # coord = tmp[3:-2]
     # print(tmp)
     at_count = len(coord)

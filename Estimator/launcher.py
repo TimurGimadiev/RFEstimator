@@ -75,19 +75,18 @@ def run(index, smi=None, **kwargs):
         else:
             reactants = best_conformers(reaction.reactants, **kwargs)
             if not reactants:
-                ReactionComponents(index, smi, None, None, None,
-                                   'anomaly terminated calculations for one of products', spend_time(start))
+                return ReactionComponents(index, smi, None, None, None,
+                                          'anomaly terminated calculations for one of products', spend_time(start))
             elif any(isinstance(x, FailReport) for x in reactants):
-                return reactants
-                # ReactionComponents(index, smi, None, None, None,
-                #                   'anomaly terminated calculations for one of reactants', spend_time(start))
+                return ReactionComponents(index, smi, reactants, None, None,
+                                          'anomaly terminated calculations for one of products', spend_time(start))
             products = best_conformers(reaction.products, **kwargs)
             if not products:
                 ReactionComponents(index, smi, None, None, None,
                                    'anomaly terminated calculations for one of products', spend_time(start))
             elif any(isinstance(x, FailReport) for x in products):
-                return products
-
+                return ReactionComponents(index, smi, reactants, products, None,
+                                          'anomaly terminated calculations for one of products', spend_time(start))
             try:
                 energy_dif = sum([x.min_energy for x in products]) - sum([x.min_energy for x in reactants])
             except TypeError:
