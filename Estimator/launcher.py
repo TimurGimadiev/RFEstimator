@@ -76,10 +76,10 @@ def run(index, smi=None, **kwargs):
             reactants = best_conformers(reaction.reactants, **kwargs)
             if not reactants:
                 return ReactionComponents(index, smi, None, None, None,
-                                          'anomaly terminated calculations for one of products', spend_time(start))
+                                          'anomaly terminated calculations for one of reactants', spend_time(start))
             elif any(isinstance(x, FailReport) for x in reactants):
                 return ReactionComponents(index, smi, reactants, None, None,
-                                          'anomaly terminated calculations for one of products', spend_time(start))
+                                          'anomaly terminated calculations for one of reactants', spend_time(start))
             products = best_conformers(reaction.products, **kwargs)
             if not products:
                 ReactionComponents(index, smi, None, None, None,

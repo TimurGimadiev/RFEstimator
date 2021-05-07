@@ -19,7 +19,7 @@ COPY README.md boot.sh setup.py /opt/
 COPY Estimator /opt/Estimator
 ENV PATH="/opt/orca:${PATH}"
 RUN cd /opt && chmod +x boot.sh && chmod +x crest &&\
-    pip3 --no-cache-dir install -e .
+    pip3 --no-cache-dir install -U -e .
 WORKDIR /data
 ENV OMP_NUM_THREADS=1
 COPY priroda /opt/priroda

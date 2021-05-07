@@ -13,12 +13,12 @@ services:
       resources:
         limits:
           cpus: '1'
-      replicas: ${workers_n}
+      replicas: 6
       update_config:
         parallelism: 2
         delay: 10s
-      restart_policy:
-        condition: on-failure
+      #restart_policy:
+      #  condition: on-failure
 
 
   redis:
@@ -30,8 +30,8 @@ services:
       replicas: 1
       placement:
         constraints: [ node.role == manager ]
-      restart_policy:
-        condition: on-failure
+      #restart_policy:
+      #  condition: on-failure
     command: ["redis-server", "--appendonly", "yes"]
     networks:
       - default
@@ -49,7 +49,7 @@ services:
         condition: on-failure
     volumes:
       - type: bind
-        source: ${inputdir}
+        source: /Users/timur/Downloads/tmp2
         target: /data
     networks:
       - default
@@ -63,11 +63,11 @@ services:
       replicas: 1
       placement:
         constraints: [ node.role == manager ]
-      restart_policy:
-        condition: on-failure
+      #restart_policy:
+      #  condition: on-failure
     volumes:
       - type: bind
-        source: ${inputdir}
+        source: /Users/timur/Downloads/tmp2
         target: /data
     networks:
       - default

@@ -99,7 +99,9 @@ def best_conf(molecule, tdir, **kwargs):
         min_energy = None
         try:
             min_energy = float(lines[-18].split(':')[1])  # different precision to one read from crest_best.xyz
-        except ValueError or IndexError:
+        except ValueError:
+            flag = True
+        except IndexError:
             flag = True
         with open(f'{tdir}/crest_best.xyz') as f:
             data = f.readlines()
@@ -107,8 +109,14 @@ def best_conf(molecule, tdir, **kwargs):
             # ad-hoc for small molecules, first met on HBr, crest_best.xyz file looks different
             try:
                 min_energy = float(data[1].split("energy:")[1].split()[0])
-            except ValueError:
+            except ValueError or IndexError:
                 print("Unexpected min energy value both in xyz and log")
+                if log:
+                    return FailReport(initial=molecule, log=p.stdout.splitlines(),
+                                      step="CREST; Unexpected min energy value both in xyz and log")
+                else:
+                    return FailReport(initial=molecule, log=None,
+                                      step="CREST; Unexpected min energy value both in xyz and log")
         # print(lines[-18].split(':')[1])  # NB different precision, round to e-5
         # print(data[1])  # NB different precision e-8
         if log:
@@ -116,8 +124,10 @@ def best_conf(molecule, tdir, **kwargs):
         else:
             return CalcResult(data, min_energy, None)
     else:
-        return FailReport(initial=molecule, log=p.stdout.splitlines(), step="priroda_dft")
-
+        if log:
+            return FailReport(initial=molecule, log=p.stdout.splitlines(), step="CREST")
+        else:
+            return FailReport(initial=molecule, log=None, step="CREST")
 
 def refine_dft(molecule, calc_result=None, **kwargs):
     dft = kwargs.get('dft', 'priroda')
@@ -130,9 +140,8 @@ def refine_dft(molecule, calc_result=None, **kwargs):
             return refine_priroda(charge, multiplicity, calc_result, tdir=tdir, log=log)
         elif dft.lower() == 'pyscf':
             return refine_pyscf(charge, multiplicity, calc_result, tdir=tdir, log=log)
-            #return FailReport(initial=calc_result, log="Not implemented", step='pyscf') # NotImplemented
     else:
-        raise NotImplemented
+        return FailReport(initial=calc_result, log="Not implemented procedure", step='dft') # NotImplemented
 
 
 def refine_pyscf(charge, multiplicity, calc_result, tdir, log=None):
@@ -158,7 +167,7 @@ def refine_pyscf(charge, multiplicity, calc_result, tdir, log=None):
 def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     if not tdir:
         tdir="/tmp/"
-    coord = [str(atom2numbers[x[:2].strip()]) + " " + x[3:] for x in calc_result.data[2:]]
+    coord = [str(atom2numbers[x.lstrip()[:2].strip()]) + " " + x[3:] for x in calc_result.data[2:]]
     priroda_input = f'''
     $system mem=1000 disk=-1000 path=/tmp $end
     $control
@@ -166,9 +175,9 @@ def refine_priroda(charge, multiplicity, calc_result, tdir, log=None):
     basis= /opt/priroda/basis/3z
     $end
     $grid accur=1e-8 $end
-    $scf procedure=bfgs $end
+    $scf procedure=bfgs iterations=64,32 $end
     $optimize
-     steps=500
+     steps=300
      tol=1e-5
      trust=0.5
     $end
