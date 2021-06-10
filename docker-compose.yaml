@@ -49,7 +49,7 @@ services:
         condition: on-failure
     volumes:
       - type: bind
-        source: /Users/timur/Downloads/tmp2
+        source: /Users/timur/Downloads/tmp2 # write your path
         target: /data
     networks:
       - default
@@ -67,26 +67,10 @@ services:
       #  condition: on-failure
     volumes:
       - type: bind
-        source: /Users/timur/Downloads/tmp2
+        source: /Users/timur/Downloads/tmp2 # write your path
         target: /data
     networks:
       - default
-
-
-# change device for your data storages, map estimator-input to folder with input data.json file, results will be
-# stored in estimator-data mapped dir
-
-#  esdata:
-#    name: estimator-data
-#    driver_opts:
-#      type: none
-#      o: bind
-#      device: ${workdir}
-#  esinput:
-#    name: estimator-input
-#    driver_opts:
-#       type: volume
-#       source: ${inputdir}
 
 networks:
   default:
