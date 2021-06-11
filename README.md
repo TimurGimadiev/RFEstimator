@@ -16,18 +16,21 @@ change directories in docker-compose file near to "source:" line,
 absolute path to dir with input.json should be provided. Example of json file is shown in example folder.
 
 speed and precision of CREST calculations, possible options :
-- quick
-- squick
-- mquick (default)
+
+* crest_speed (https://github.com/grimme-lab/crest):
+* * quick
+* * squick 
+* * mquick (default)
   
-dft:
-    priroda - use priroda16 for dft calculations (PBEPBE 3z)
-    pyscf(not finished) - use pyscf package for calculations (B3LYP)
+* dft:
+* * priroda - use priroda16 for dft calculations (PBEPBE 3z),
+              programm developed by D. Laikov https://rad.chem.msu.ru/~laikov/ru/
+* * pyscf (not finished) - use pyscf package for calculations (B3LYP)
     None or not mentioned in json (default) - do not perform DFT
 
-obabel_fast - speed vs precision in 3D generation by open babel
-* True - can save some time in generation of 3D by mmff94
-* False or not mentioned in json (default)
+* obabel_fast - speed vs precision in 3D generation by openbabel (http://openbabel.org/wiki/Main_Page)
+* * True - can save some time in generation of 3D by mmff94
+* * False or not mentioned in json (default)
 
 # Run calculations
 
