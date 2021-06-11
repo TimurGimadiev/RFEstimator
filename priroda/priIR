@@ -1,0 +1,392 @@
+#!/usr/bin/perl -ws
+
+#use List::Util qw(max min);
+#use Data::Dump 'pp';
+
+our ($h,$help,
+     $minfreq,$maxfreq,$linewidth,$points,$lineshape,
+     $terminal,$label,$yaxis,$level,
+     $jcamp);
+
+# Если нет параметров, то печатаем справку
+if (!$ARGV[0] or $h or $help) {
+  print "
+ИК-спектр из расчетов.
+
+ Usage: priIR [options] file [files]
+ Зависимости: perl, [gnuplot]
+
+Из выдач расчетных программ извлекается ИК-частоты и интенсивности,
+превращаются в спектр, который рисует gnuplot. Если gnuplot отсутствует, 
+то спектр записывается в file.dx формата JCAMP-DX.
+
+Форматы расчетных программ определяются автоматически.
+Пока это out'ы Природы (версий 2, 6) и GAMESS US, файлы molden (*.freq).
+
+Опции (после = указаны умолчаемые значения):
+-maxfreq=4000  Левый край спектра (cm-1)
+-minfreq=20    Правый край спектра (cm-1)
+-linewidth=10  Ширина линии на половине высоты (cm-1)
+-points=10     Количество точек спектра на ширину линии (шаг спектра
+               linewidth/points округлится так, чтобы  быть делителем 10).
+-lineshape=lorentz  Форма линии, lorentz либо gauss (гауссова линия уже),
+                    либо палками, если что-то другое
+
+Для gnuplot:
+-terminal=x11  Терминал для gnuplot. Если терминал - файловый формат 
+               (f.e. postscript), то перенаправить в файл.
+               Список терминалов: echo 'help set terminal' | gnuplot
+-label         Помечать частоты колебаний (не вершины пиков!)
+-level=80      Уровень процента пропускания, выше которого не помечать частоты
+-yaxis         Рисовать ось с процентом пропускания (%T).
+
+-jcamp         На каждый спектр делать JCAMP-DX (файл с расширением .dx).
+               -terminal=null, если не нужен рисунок от gnuplot.
+\n";
+  exit;
+}
+
+# gnuplot (программа для рисования графиков)
+my $gnuplot = `which gnuplot`;
+chomp $gnuplot;
+$jcamp = 1 unless $gnuplot;
+
+# Терминал для gnuplot если не задан, то x11
+$terminal ||= 'x11';
+
+$level ||= 80;
+
+$minfreq = 20 unless defined $minfreq;
+$maxfreq = 4000 unless defined $maxfreq;
+$linewidth = 10 unless $linewidth;
+$points ||= 10;
+$lineshape ||= 'lorentz';
+
+my @SPC;
+my @peak;
+my @freq;
+my $dataset = 0;
+foreach my $file (@ARGV) {
+  
+  my ($freq) = read_IR_file($file) or next;
+  
+  my $spc = spectrum($freq,
+                     maxfreq=>$maxfreq, 
+                     minfreq=>$minfreq, 
+                     linewidth=>$linewidth, 
+                     points=>$points,
+                     lineshape=>$lineshape,
+                     baseoffset=>$dataset,
+                    );
+  
+  my $max_int= max( map {$_->[1]} @$spc );
+  
+  $_->[1] = 100*(1-$_->[1]/$max_int) for @$spc;
+  @$spc = reverse @$spc;
+  $SPC[$dataset] = $spc;
+  #pp $spc;
+  
+  $_->[1] = 100*(1-$_->[1]/$max_int) for @$freq;
+  $freq[$dataset] = $freq;
+  #pp $freq;
+  
+  if ($gnuplot) {
+    open F, '>', "$file.IR" or die "Can't open $file.IR: $!\n";
+    foreach (@$spc) {
+      printf F "%8.2f %8.2f\n", @$_;
+    }
+    close F;
+  }
+  $files[$dataset] = $file;
+  
+  if ($jcamp) {
+    write_jcamp($spc, $file);
+  }
+  
+  $dataset++;
+}
+#pp @files;
+#pp \@peak; exit;
+
+# Если есть gnuplot, то будем рисовать спектры
+my $n = @SPC;
+if ($gnuplot && $terminal ne 'null') {
+  my $bottom_offset = $label ? 10 : 0;
+  open GP, "|-", "$gnuplot -persist" or die "Can't pipe to gnuplot: $!\n";
+  print GP "
+  set terminal $terminal
+  set multiplot layout $n,1 upwards
+  set xrange [$maxfreq:$minfreq] reverse
+  set yrange [-5:101]
+  set xlabel '1/CM'
+  set tics out
+  set nox2tics
+  set border 1
+  set noytics
+  set offsets 0, 0, 0, $bottom_offset
+  ";
+  if ($yaxis) {
+    print GP "
+    set ylabel '%T'
+    set noy2tics
+    set ytics
+    set border 3
+    ";
+  }
+  foreach my $dataset (0..$#SPC) {
+#    $ytitle = $dataset+0.1;
+    my $ytitle = 10;
+    my $xtitle = $minfreq +($maxfreq-$minfreq)/50;
+#    print GP "set label '$files[$dataset]' at $maxfreq,$ytitle right rotate\n";
+    print GP "set label '$files[$dataset]' at $xtitle,$ytitle rotate\n";
+    if ($label) {
+      # Печатаем метки в gnuplot
+      foreach (grep {$_->[1]<$level} @{$freq[$dataset]}) {
+        printf GP "set label '%d-' at $_->[0],$_->[1] right rotate\n", $_->[0];
+      }
+    }
+    if ($dataset > 0) {
+      print GP "set noxtics
+                set noborder
+                set noxlabel
+                set offsets 0, 0, 0, $bottom_offset
+                ";
+    }
+    print GP "plot '$files[$dataset].IR' notitle with line\n";
+    print GP "unset label\n";
+    #unlink "$files[$dataset].IR" if -f "$files[$dataset].IR";
+  }
+  close GP;
+  unlink grep { -f } map {"$_.IR"} @files;
+}
+
+sub max {
+  my $max = shift;
+  foreach (@_) {
+    $max = $_ if $max < $_;
+  }
+  return $max;
+}
+
+
+sub read_IR_file {
+  my $file = shift;
+  my $d = qr/\d+(?:\.\d+)?/;
+  my $outtype = 'unknown';
+  my $debug = 0;
+  
+  open PRI, $file or die "Can't open $file: $!\n";
+  # determine the creator of the file
+  while (<PRI>) {
+    if (m/Priroda(?:\s+version)?\s+(\d+)/) { # for Priroda v. 2-9
+      my $ver = $1;
+      last if eof(PRI); $_ = <PRI>;
+      next unless m/^\s*copyright\s+\(c\)\s.*\sLaikov$/; # for Priroda v. 2-9
+      $outtype = "priroda$ver";
+      last;
+    }
+    elsif (/^\s{8,}\*{30,}$/) {
+      last if eof(PRI); $_ = <PRI>;
+      next unless m/^\s*\*\s+GAMESS\s+VERSION\s+=\s+.+\s+\*$/;
+      last if eof(PRI); $_ = <PRI>;
+      next unless m/^\s*\*\s+FROM\s+IOWA\s+STATE\s+UNIVERSITY\s+\*$/;
+      $outtype = 'gamessUS';
+      last;
+    }
+    elsif (m/\Q[Molden Format]/) {
+      $outtype = 'molden';
+      last;
+    }
+    elsif (m/^\s*$d\s+$d\s*$/) {
+      $outtype = 'txt';
+      seek PRI, 0, 0;
+      last;
+    }
+  }
+  warn "$file: $outtype\n" if $debug;
+  
+  my (@freq,@intens);
+  
+  if ($outtype eq 'priroda6') {
+    while (<PRI>) {
+      if (m/\Q | Mode | Freq.   | Mass. | IR Int. /) { # Priroda 6
+        <PRI>;
+        while (<PRI>) {
+          last if m/\*/;
+          s/\|//g;
+          my ($freq,$intens) = (split)[1,3];
+          $freq =~ s/i//;
+          push @freq, $freq;
+          push @intens, $intens;
+        }
+      }
+    }
+  }
+  elsif ($outtype eq 'priroda2') {
+    while (<PRI>) {
+      push @freq, grep {!/^i/} split if s/^ freq\.//;
+      push @intens, split if s/^ ir i\.//;
+    }
+  }
+  elsif ($outtype eq 'gamessUS') {
+    while (<PRI>) {
+      push @freq, grep {!/^I/} split if s/^       FREQUENCY://;
+      push @intens, split if s/^    IR INTENSITY://;
+    }
+  }
+  elsif ($outtype eq 'molden') {
+    LOOP:
+    while (<PRI>) {
+      if (m/^\[(FREQ|INT)\]$/) {
+        while (<PRI>) {
+          redo LOOP if m/^\[FREQ|INT\]$/;
+          last if m/^\[/;
+          chomp;
+          push @freq,   0+$_ if $1 eq 'FREQ';
+          push @intens, 0+$_ if $1 eq 'INT';
+        }
+      }
+    }
+  }
+  elsif ($outtype eq 'txt') {
+    while (<PRI>) {
+      m/^\s*($d)\s+($d)\s*$/ or last;
+      push @freq,   $1;
+      push @intens, $2;
+    }
+  }
+    
+  close PRI;
+  
+  if ($#freq != $#intens) {
+    warn "freq != intens for $file";
+    return undef;
+  }
+  
+  if ($debug) {
+    for (my $i=0; $i<@freq; $i++) {
+      print "$freq[$i]\t$intens[$i]\n";
+    }
+  }
+  
+  for (my $i=0; $i<@freq; $i++) {
+    $freq[$i] = [ $freq[$i],$intens[$i] ];
+  }
+  return \@freq, $outtype;
+}
+
+sub spectrum {
+  my $freq = shift;
+  my %param = (
+    linewidth => 10,
+    maxfreq => 4000,
+    minfreq => 20,
+    points => 10,
+    lineshape => 'lorentz',
+    baseoffset => 0,
+    @_
+  );
+  #die "linewidth = 0\n" if $param{linewidth} == 0;
+  die "minfreq = maxfreq\n" if $param{maxfreq}==$param{minfreq};
+  
+  my $minN = 100;
+  my $maxN = 100_000;
+  
+  my $height = max(map {$_->[1]} @$freq);
+  my $level = $height/10000;
+  
+  my $F1 = $param{minfreq};
+  my $F2 = $param{maxfreq};
+  ($F1,$F2) = ($F2,$F1) if $F1 > $F2;
+  
+  my $d = $param{linewidth}/$param{points};
+  my $min_d = ($F2 - $F1) / $maxN;
+  $d = $min_d if $d < $min_d;
+  my $max_d = ($F2 - $F1) / $minN;
+  $d = $max_d if $d > $max_d;
+  if (sprintf('%e',$d) =~ /^(\d+\.\d).*e(.+)$/) {
+    if    ($1 < 1.5) { $d = 0+ "1e$2" }
+    elsif ($1 < 3.5) { $d = 0+ "2e$2" }
+    elsif ($1 < 7.5) { $d = 0+ "5e$2" }
+    else             { $d = 0+"10e$2" }
+  }
+  
+  my $N = ($F2 - $F1) / $d;
+  
+  my @SPC;
+  foreach (0..$N) {
+    push @SPC, [ $F1 + $_*$d , $param{baseoffset} ];
+  }
+  
+  my @halfline;
+  my $b = $param{linewidth}/2;
+  my $y = 1;
+  my $dd = $d;
+  while ($y > 0.0001) {
+    push @halfline, $y;
+    my $t = $dd/$b;
+    if ($param{lineshape} eq 'lorentz') {
+      $y = 1 / (1 + $t*$t); #lorentzian
+    }
+    elsif ($param{lineshape} eq 'gauss') {
+      $y = exp(-$t*$t*log(2)); # gaussian
+    }
+    else {
+      last; # stick
+    }
+    $dd += $d;    
+  }
+  
+  foreach (@$freq) {
+    my @hline;
+    foreach my $x (@halfline) {
+      my $int = $x*$_->[1];
+      last if  $int < $level;
+      push @hline, $int;
+    }
+    
+    my $I = sprintf "%.0f", ($_->[0] - $F1) / $d;
+    #print "($_->[0] - $F1) / $d = $I\n";
+    foreach (-$#hline..$#hline) {
+      my $j = $I + $_;
+      next if $j<0 or $j>$N;
+      $SPC[$j][1] += $hline[abs($_)]; 
+    }
+  }
+  return \@SPC;
+}
+
+sub write_jcamp {
+  my ($spc, $file) = @_;
+  
+  my ($sec,$min,$hour,$mday,$mon,$year) = localtime((stat $file)[9]);
+  my $DATE = sprintf "%02d/%02d/%02d", $year % 100, $mon+1, $mday;
+  my $TIME = sprintf "%02d:%02d:%02d", $hour,$min,$sec;
+  
+  open F, '>', "$file.dx" or die "Can't write $file.dx: $!\n";
+  print F "##TITLE= Calculated IR from $file
+##JCAMP-DX= 4.24
+##DATA TYPE= INFRARED SPECTRUM
+##ORIGIN= $0
+##OWNER= $ENV{USER}
+##DATE= $DATE
+##TIME= $TIME
+##DELTAX= @{[$spc->[1][0]-$spc->[0][0]]}
+##XUNITS= 1/CM
+##YUNITS= TRANSMITTANCE
+##XFACTOR= 1.00
+##YFACTOR= 1.00
+##FIRSTX= $spc->[0][0]
+##LASTX= $spc->[-1][0]
+##NPOINTS= @{[$#{$spc}+1]}
+##FIRSTY= $spc->[0][1]
+##MAXY= 100
+##MINY= 0
+##XYDATA= (X++(Y..Y))
+";
+  foreach (@$spc) {
+    printf F "  %11.6f  %6.2f\n", $_->[0], $_->[1];
+  }
+  print F "##END= \n";
+  close F;
+}

@@ -1,0 +1,416 @@
+ -------------
+ Input Summary
+ -------------
+
+ The program uses a kind of NAMELIST free format input.
+ Data are organized in groups marked with a $keyword
+ and ending with $end , for example
+ $system mem=128 $end
+ Within each input group variable names can be abbreviated,
+ like in above where "mem" was used as an abbreviation for "memory".
+ Variables can be scalar or arrays, in the latter case
+ one has an option to modify only some elements of an array
+ using indices, for example
+ $guess na(85)=86,85 $end
+ assigns value 86 to 85th element of "na", and value 85
+ to 86th element.
+
+ Most of the parameters have appropriate default values...
+ Some should be set according to the problem being studied...
+
+$system
+
+ memory=%d    memory limit in megabytes
+
+ disk=%d      positive: disk space in gigabytes
+              negative: amount of memory in megabutes
+              to use as disk emulation
+
+ path=%s      directory path for temporary disk files.
+              Colon-separated list of paths for each processor
+              (optional for parallel execution) can be used,
+              for example path=/tmpa:/tmpb:/tmpc:/tmpd
+              specifies that for a four-processor execution
+              process #1 writes files to /tmpa
+              process #2 writes files to /tmpb
+              and so on. In this case /tmpa , /tmpb , /tmpc and /tmpd
+              should be mounted on different physical drives
+              for good performance.
+              **NOTE**: For all methods except GGA DFT the performance will be
+              degraded terribly if more than one process read and write
+              large files on the same physical drive!
+              By defaul the program uses the TMPDIR environment variable,
+              or the current working directory.
+              **NOTE**: one should NEVER use an NFS (network file system)
+              for temporary files.
+
+$control
+
+ task=%s      job type, values are:
+              energy
+              gradient
+              hessian
+              optimize   - geometry optimization          - see $optimize
+              irc        - intrinsic reaction coordinate  - see $optimize
+              scan       - relaxed potential energy surface scan
+                                                          - see $optimize
+              nmr        - NMR shielding tensors (DFT only)
+              dipole     - numeric evaluation of dipole polarizabilities
+                           and their first derivatives w.r.t. nuclear coordinates
+
+ theory=%s    theoretical method:
+              dft        - GGA DFT using density fitting
+              ridft      - hybrid DFT with exact exchange using
+                           resolution-of-identity integral approximiation (NEW)
+              tddft      - GGA time-dependent DFT
+              rimp2      - second-order M\oller-Plesset perturbation theory
+                           using the RI approximation
+              hf
+              cis        - for RHF and UHF
+              mp2        - for RHF, UHF and ROHF
+              mp3        - for RHF
+              mp4dq      - for RHF
+              mp4sdq     - for RHF
+              mp4sdtq    - for RHF
+              ccd        - for RHF and UHF
+              ccsd       - for RHF and UHF
+              ccsdsd     - linear-response CCSD for excited states,
+                           for RHF
+              .....      - undocumented
+
+ state=%d,%d             for excited-state methods:
+                         compute properties for n-th excited state
+                         (first value) and include N states (second value)
+                         in iterative solution of the equations
+
+ basis=%s                file name containing basis set data,
+                         if not specified - basis set data are
+                         read from the input file
+
+ four=%d                 four-component option
+                         0 - non-relativistic theory (default)
+                         1 - scalar-relativistic theory
+
+ nucleus=%s              nuclear model:
+                         finite - Gausian nuclear model
+                                  (default for four-component theory)
+                         point  - point nucleus model
+                                  (default for non-relativistic theory)
+
+ print=%s                a string specifying various printing options
+                         which may be appended one after another:
+                         +charges   - print Hirschfeld charges (for DFT methods)
+                         +bonds     - print Mulliken popultions and bond
+                                      orders (for SCF only)
+                         +esr       - print ESR parameters
+                         +vectors   - print SCF vectors
+                         +molden    - generate input data for MOLDEN program:
+                                      for task=hessian these are vibrations,
+                                      and if +vectors+molden is specified,
+                                      than the scf orbitals are also prepared
+                                      for visualization using MOLDEN.
+
+ save=%s                 file name for saving and reading
+                         scf vectors - see $guess
+$guess
+
+ read=%d                 reading scf vectors from file
+                         1 - read
+                         0 - do extended H"uckel guess
+ na(%d)=%d,%d,...        reorderig of starting vectors for alpha spin
+ nb(%d)=%d,%d,...        reorderig of starting vectors for beta  spin
+                         these arrays default to
+                         na(1)=1,2,3,4,5,...,N
+                         nb(1)=1,2,3,4,5,...,N
+                         example: na(25)=26,25 - swap 25th and 26th vectors
+
+$dft
+
+ functional=%s           exchange-correlation approximation (for DFT)
+                         PBE  - Perdew-Burke-Ernzerhof (default GGA)
+                                Phys. Rev. Lett. 77 (1996) 3865-3868
+                         mPBE - Adamo-Barone modification of PBE
+                                J. Chem. Phys. 116 (2002) 5933-5940
+                         BLYP - Becke-Lee-Yang-Parr
+                                Phys. Rev. A 38 (1988) 3098-3100
+                                Phys. Rev. B 37 (1988) 785-789
+                         OLYP - Handy-Cohen exchange + LYP correlation
+                                J. Chem. Phys. 117 (2002) 1441-1449
+                         PBE1 - a hybrid of PBE with 1/4 exact exchange:
+                                J. Chem. Phys. 110 (1999) 6158-6170
+                                (defaul for theory=riDFT)
+                         B3LYP_PW  and
+                         B3LYP
+                               - Becke's three-parameter hybrid of the form
+                                 Exc = 0.2*Ex(HF) + 0.8*(0.9*Ex(B) + 0.1*Ex(S))
+                                     + 0.81*Ec(LYP) + 0.19*Ex(LSD)
+                                 where
+                                 Ex(HF)  is the exact Hartree-Fock exchange,
+                                 Ex(B)   is the Becke's GGA for exchange
+                                         (Phys. Rev. A 38),
+                                 Ex(S)   is the Slater's local exchange,
+                                 Ec(LYP) is the LYP correlation
+                                         (Phys. Rev. B 37)
+                                 Ec(LSD) is the local correlation from
+                                         either Phys. Rev. B 45 (1992) 13244
+                                         or     Can. J. Phys. 58 (1980) 1200
+                                 Note that some comercial programs use
+                                 Ec(VWN) instead of Ec(PW),
+                                 even though A.D. Becke himself used Ec(PW),
+                                 see J. Chem. Phys. 98 (1993) 5648.
+
+$scf
+
+ restrict=%d             0 - spin-unrestricted
+                         1 - spin-restricted (available only for few methods)
+                         By default restrict=1
+                         if the system has an even number of electrons,
+                         and restrict=0 otherwise.
+
+ convergence=%f,%f       scf/cp-scf convergence:
+                         1e-6, 1e-3 by default (recommended).
+                         You may want to decrease it to 1e-5
+                         during preliminary geometry optimizations
+                         in difficult cases - to save the time.
+
+ iterations=%d,%d        number of iterations/microiterations.
+
+ procedure=%s            a procedure to solve the scf equations:
+                         nr    - Newton-Raphson quadratically-convergent
+                                 (default for GGA DFT)
+                         bfgs  - BFGS hessian update
+
+                         If one procedure fails you may want to try another...
+
+ d1small=%d              1 - include small component density when solving
+                             linear equations of quadratically-convergent SCF
+                             (for scalar-relativistic pure-DFT)
+                         0 - discard these contributions (default)
+                             This results in faster calculation,
+                             but may fail to converge for molecules
+                             with heaviest atoms.
+
+ core=%d                 number of core electrons (for HF-based methods),
+                         by default it is computed from an atom table
+                         -- see $atoms
+
+$atoms
+
+ core=%d,%d,...          for HF-based methods this specifies the number
+                         of core shells for L=0,1,2,3 for each atomic number.
+                         Example:
+                         core(280)=2,1,0,0
+                         specifies that 1s,2s,2p shells (10 electrons)
+                         for Nickel belong to the core.
+                         Note: these data are used only to compute
+                         the total number of core electrons in the molecule.
+
+ mcore=%d                a simple way to specify the number of outer core shells
+                         to be included in correlation treatment.
+                         For example, mcore=M means to add all shells with
+                         principal quantum number M less than that
+                         of the outermost valence shell.
+
+$grid
+
+ accuracy=%f             accuracy (of xc-energy per atom) of the adaptively
+                         generated grid (for DFT methods),
+                         1e-8 by default (fine grid).
+                         Value 1e-7 can be used to speed up some
+                         geometry optimizations with tolerance<=1e-4,
+                         Value 1e-9 can be used for very accurate
+                         calculations.
+
+$optimize
+
+ saddle=%d               1 - optimize a saddle point
+                         0 - optimize to a minimum (default)
+
+ tolerance=%f,%f         tolerance on gradient (first value)
+                         and displacement (second value) in au.
+                         default is 0.0001,0.01 ,
+                         if only the first is given, the second is
+                         computed as 100 times as much (recommended default)
+
+ trust=%f,%f,%f          trust radius - maximum value, minimum value,
+                         and initial value. If only the first is specified,
+                         then the minimum value is 1/16 thereof,
+                         and the initial value is 1/4 thereof.
+
+ follow=%d               follow n-th eigenvector (for saddle point search)
+
+ steps=%d                number of optimization cycles (50 by default)
+
+ cartesian=%d            0 - use redundant internal coordinated (defaul)
+                         1 - use cartesian coordinated (last resort)
+
+ back=%d                 1 - trace IRC path backwards
+                         0 - trace IRC path forwards
+
+ points=%d               optimize N points during an IRC run,
+                         or do N constrained geometry optimization
+                         during a scan run.
+
+ radius=%f               radius in mass-weighted coordinates
+                         for IRC path optimization : the distance
+                         between adjacent IRC points will be roughly twice
+                         as much.
+
+ coordinated=%d,%d,...   a list of redundant internal coordinates to use.
+                         By default it is generated automatically.
+                         Each coordinate is specified by 5 integers:
+                         1,i,j,0,0  - distance i-j
+                         2,i,j,k,0  - angle    i-j-k
+                         3,i,j,k,l  - torsion  i-j-k-l
+                         4,i,j,k,l  - special coordinate for linear fragments
+                         5,i,j,k,l  - special coordiante for linear fragments
+
+ fix=%d,%d,...           a list of internal coordinated to be kept fixed
+                         during geomety optimization. The format is like above
+ value=%f,%f,...         the values of the fixed internal coordinates
+                         (in angstroms and degrees). By default these are
+                         computed from input geometry. For the scan run type
+                         this is a list of all initial values followed
+                         by the list of final values. Example:
+                         $optimize
+                          fix   =1,7,9,0,0, 1,8,10,0,0, 3,8,7,9,0, 3,10,9,7,0
+                          val(1)=1.6,       1.7
+                          val(5)=2.0,       2.1
+                          points=5
+                         $end
+                         In this case 5 geometry optimizations will be done
+                         with values 1.6, 1.7, 1.8, 1.9, 2.0 for distance 7-9
+                              values 1.7, 1.8, 1.9, 2.0, 2.1 for distance 8-10
+                         and with angles 8-7-9 and 10-9-7 fixed at their
+                         input values.
+
+ gradient=%d             when using second derivatives precomputed
+                         by a theoretical method/basis set other than currently
+                         used, specify gradient=0 to exclude gradient terms
+                         in internal/cartesian transformation at the first
+                         geometry. Otherwise use the default.
+
+ print=%d                printing:
+                         0 - minimal
+                         1 - detailed, including output of approximate
+                             second derivatives for restart.
+
+$thermo
+
+ sigma=%d                symmetry number for thermochemistry
+
+ temperature=%f,%f,...   an array of up to 50 temperatures in K.
+
+$d2edr2
+
+ length=%f           step length for numeric differentiation of
+                     potential energy surface,
+                     for numerical hessian calculation.
+
+ displace=%d         1 - use one displacement for each coordinate
+                     2 - use two displacements (more accurate but twice
+                         slower, default)
+                     Note that in some cases you may want to increase
+                     SCF convergence to get more accurate numerical hessians.
+
+ steps=%d,%d         initial and final numerical differentiation steps for
+                     this run: a useful option for numerical hessian restarts:
+                     let the reference geometry be #0, 1st displaced
+                     geometry #1 and so on up to 3N or 6N (1 or 2 disp.).
+                     default is: 0,-1 which means to do all necessary steps
+                     from 0 to 3N|6N in one run.
+                     Other possibility can be illustrated by the example:
+                     for a 12-atom molecule one can prepare 4 input files
+                     which differ only in that:
+                     $d2edr2 disp=1 steps= 0, 9 $end - for file mol.in1
+                     $d2edr2 disp=1 steps=10,18 $end - for file mol.in2
+                     $d2edr2 disp=1 steps=19,27 $end - for file mol.in3
+                     $d2edr2 disp=1 steps=28,36 $end - for file mol.in4
+                     Then 4 calculation can be started in parallel on
+                     different computers, after which the data can be
+                     extracted from all output files and appended to one
+                     input file:
+                     grep "num>" mol.out{1,2,3,4} | sed "s/\.*num>//g" >> mol.in
+                     then one adds
+                     $d2edr2 steps=-1 $end
+                     and executes the program once again to process the partial
+                     results.
+
+$nmr
+
+ standard=%f,%f,...
+               Shielding constants for each atomic number to use as
+               standards in NMR chemical shift calculations. One may
+               specify values for atoms present in the molecule only,
+               for example:
+                 standard(1)=31.3915
+                 standard(6)=181.9921
+               which is computed for Si(CH3)4 can be used for a series
+               of hydrocarbons under study.
+
+ points=%f,%f,%f,
+        %f,%f,%f,
+        ...
+               An option to add points in space (with x,y,z coordinates in
+               angstroms) for which magnetic shielding tensors will be
+               computed in addition to the nuclear centers.
+
+$end
+
+$molecule
+            This input group has special format with ordered data:
+
+ charge=%d         - charge of molecule
+ mult=%d           - spin multiplicity
+               next should follow one of the two keywords:
+ cartesian         - cartesian coordinates will be used
+ z-matrix          - distance/angle/torsion coordinates will be used
+
+               in "cartesian" case the input consists basically
+               of four numbers four each atom:
+ %d %f %f %f       - atomic number, x, y, z coordinate in Angstroms.
+               next an atomic mass may be specified, if using different
+               isotopes:
+ mass=%f       
+               this is repeated for each atom in the system
+
+               in the case of "z-matrix" input one uses the format
+ %d %d %f %d %f %d %f mass=%f
+               to specify the atomic number and three internal coordinates.
+               Different combinations of distances/angles/torsions are
+               possible:
+               q_i j r_ij  k a_ijk  l b_ijkl - distance, angle, and torsion;
+               q_i j r_ij  k a_ijk -l a_ijl  - distance and two angles
+               q_i j r_ij -k r_ik   l b_ijkl - two distances and torsion
+               q_i j r_ij -k r_ik  -l r_il   - three distances
+               the mass specification is optional as above.
+               Distances are in Angstroms, angles and torsions are in degrees.
+
+               One has the possibility to mix both formats:
+               The first atoms can be entered in cartesian format,
+               followed by a z-matrix input of the remaining ones.
+               This is handy for modifying stuctures.
+
+               If z-matrix input is used alone, the first atom should be
+               specified only by its atomic number, the second using
+               only the distance, the third using only
+               two internal coordinates.
+
+ set=%s        This optional keyword can be used to specify the basis set
+               for the atoms whose coordinates follow after it.
+               For example:
+                $molecule
+                 z-matrix
+                 set=B2
+                   8
+                 set=B1
+                   1    1    0.96252725
+                   1    1    0.96252725    2    102.943872
+                $end
+              Here the oxygen atom has a 'B2' set,
+              while the hydrogens have 'B1' instead.
+              The names of the basis sets should match those found in the
+              basis set file.
+
+$end
+

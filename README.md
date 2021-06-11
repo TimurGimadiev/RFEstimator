@@ -11,9 +11,49 @@ To build an image:
 
     docker build . -t estimator 
 
-# Docker run
+# Input files
+change directories in docker-compose file near to "source:" line, 
+absolute path to dir with input.json should be provided. Example of json file is shown in example folder.
 
-Prepare env file with REDIS_URL key valued by redis task server url.
-Run required amount of containers with next command:
+speed and precision of CREST calculations, possible options :
+- quick
+- squick
+- mquick (default)
+  
+dft:
+    priroda - use priroda16 for dft calculations (PBEPBE 3z)
+    pyscf(not finished) - use pyscf package for calculations (B3LYP)
+    None or not mentioned in json (default) - do not perform DFT
 
-      docker run -d --rm --env REDIS_URL=redis://ip estimator
+obabel_fast - speed vs precision in 3D generation by open babel
+* True - can save some time in generation of 3D by mmff94
+* False or not mentioned in json (default)
+
+# Run calculations
+
+    docker compose up
+or
+
+    docker stack deploy -c docker-compose.yaml estimator
+
+The results will be stored in python .shelve file
+For each job several types of responses available:
+* ReactionComponents (python named tuple):
+* * index - serial number of reaction
+* * smi - SMILES of reaction
+* * reactants - list of  CalcResult (python named tuple) for reactants
+* * products - list of  CalcResult (python named tuple) for products
+* * energy_dif - difference in energies between products and reactants (Hartree)
+* * comments
+* * time_s - calculation execution time
+    
+* CalcResult (python named tuple) - result of successful calculations
+* * data - list of strings as lines in XYZ file
+* * min_energy - energy of converged structure   
+* * log - full output of calculations, if log option is None or omitted in json
+    
+* FailReport (python named tuple)
+* * initial - initial file
+* * log - output of calculations
+* * step - at which step calculations failed
+

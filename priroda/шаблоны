@@ -1,0 +1,54 @@
+#оптимизация
+# $grid accuracy=1e-8 $end оптимал
+$system memory=1536 disk=10 $end
+$control theory=dft task=optimize basis=/home/stsuko/priroda/3z.bas $end
+$dft functional=PBE $end
+$optimize steps=99 saddle=0/1 $end
+$grid accuracy=1e-6 $end
+$molecule charge=0 mult=1 z-matrix
+set=basis
+…
+set=
+…
+$end
+***>>>если гессиан мнимый или это ПС
+$energy
+…
+$end
+<<<***
+
+#гессиан
+$system memory=1536 disk=10 $end
+$control theory=dft task=hessian basis=/home/stsuko/priroda/3z.bas $end
+$dft functional=PBE $end
+$thermo temperature=0.0, 10.0, 20.0, 298.15, 373.15 $end
+$molecule charge=0 mult=1 z-matrix
+…
+$end
+
+#конформации
+$system memory=1536 disk=10 $end
+$control theory=dft task=scan basis=/home/stsuko/priroda/3z.bas $end
+$dft functional=PBE $end
+$optimize steps=100 fix=3,а,б,с,д value=-угол, угол points=10 $end
+
+#спуск с ПС
+$system memory=1536 disk=10 $end
+$control theory=dft task=irc basis=/home/stsuko/priroda/3z.bas $end
+$dft functional=PBE $end
+$optimize steps=100 back=0/1 $end
+$molecule charge=0 mult=1 z-matrix
+…
+$end
+$energy
+…
+$end
+
+#ямр
+$system memory=1536 disk=10 $end
+$control theory=dft task=nmr basis=/home/stsuko/priroda/3z.bas $end
+$dft functional=PBE $end
+$nmr standard(1)=31.3917 standard(6)=182.0037 $end
+$molecule charge=0 mult=1 z-matrix/cartesian
+…
+$end

@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from.launcher import rq_launch
+from .launcher import rq_launch
 from redis import Redis
 import shelve
 
@@ -31,7 +31,7 @@ def listener(host='redis', filename='/data/results.shelve'):
             except AttributeError:
                 print("qout.get() error met")
                 continue
-            #print(data)
+            # print(data)
             w[str(data.index)] = data
 
 

@@ -19,26 +19,20 @@
 #
 from collections import deque
 from multiprocessing import Process, Queue
-from pathlib import Path
 from queue import Empty
 from redis import Redis
 from rq import Queue as RQueue
-from shutil import rmtree
-from tempfile import mkdtemp
 from time import sleep, monotonic
-from pyscf import gto, scf
-from pyscf.geomopt.berny_solver import optimize
-from CGRtools import smiles, RDFRead
-from .utilities import best_conf, refine_dft, best_conformers, CalcResult, FailReport
+from CGRtools import smiles
+from .utilities import best_conformers, FailReport
 from collections import namedtuple
 from time import time
-from io import StringIO
 
 ReactionComponents = namedtuple('ReactionComponents',
                                 ['index', 'smi', 'reactants', 'products', 'energy_dif', 'comments', 'time_s'])
 
 
-def spend_time(start):
+def spent_time(start):
     return time()-start
 
 
@@ -69,34 +63,34 @@ def run(index, smi=None, **kwargs):
     # TO DO: add check for reaction container
     if reaction:
         if not reaction.reactants:
-            return ReactionComponents(index, smi, None, None, None, 'problem: with reactants', spend_time(start))
+            return ReactionComponents(index, smi, None, None, None, 'problem: with reactants', spent_time(start))
         elif not reaction.products:
-            return ReactionComponents(index, smi, None, None, None, 'problem: with products', spend_time(start))
+            return ReactionComponents(index, smi, None, None, None, 'problem: with products', spent_time(start))
         else:
             reactants = best_conformers(reaction.reactants, **kwargs)
             if not reactants:
                 return ReactionComponents(index, smi, None, None, None,
-                                          'anomaly terminated calculations for one of reactants', spend_time(start))
+                                          'anomaly terminated calculations for one of reactants', spent_time(start))
             elif any(isinstance(x, FailReport) for x in reactants):
                 return ReactionComponents(index, smi, reactants, None, None,
-                                          'anomaly terminated calculations for one of reactants', spend_time(start))
+                                          'anomaly terminated calculations for one of reactants', spent_time(start))
             products = best_conformers(reaction.products, **kwargs)
             if not products:
                 ReactionComponents(index, smi, None, None, None,
-                                   'anomaly terminated calculations for one of products', spend_time(start))
+                                   'anomaly terminated calculations for one of products', spent_time(start))
             elif any(isinstance(x, FailReport) for x in products):
                 return ReactionComponents(index, smi, reactants, products, None,
-                                          'anomaly terminated calculations for one of products', spend_time(start))
+                                          'anomaly terminated calculations for one of products', spent_time(start))
             try:
                 energy_dif = sum([x.min_energy for x in products]) - sum([x.min_energy for x in reactants])
             except TypeError:
                 return ReactionComponents(index, smi, reactants, products,
-                                          None, 'min energy read error', spend_time(start))
+                                          None, 'min energy read error', spent_time(start))
             return ReactionComponents(index, smi, reactants, products,
-                                      energy_dif, 'terminated normally', spend_time(start))
+                                      energy_dif, 'terminated normally', spent_time(start))
     else:
         return ReactionComponents(index, smi, None, None, None, 'problem: reaction smiles empty or incorrect',
-                                  spend_time(start))
+                                  spent_time(start))
 
 
 def worker(queue_in, queue_out):
@@ -158,10 +152,7 @@ class RQueueWrapper:
     def put(self, index, result_ttl=3600, job_timeout=3600, **kwargs):
         self.queue.enqueue(rq_worker, index, **kwargs, job_timeout=job_timeout, result_ttl=result_ttl)
 
-
     def get(self, block=True, timeout=None, *, _sleep=2):
-        #if self.buffer:
-        #    return self.buffer.popleft()
         if block:
             if timeout is None:
                 while True:
@@ -170,10 +161,6 @@ class RQueueWrapper:
                         job = self.queue.fetch_job(ids[0])
                         res = job.result
                         job.delete()
-                        #if len(res) > 1:
-                        #    self.buffer.extend(res[1:])
-                        #    return res[0]
-                        #elif res:
                         return res
                     sleep(_sleep)
             else:
@@ -184,10 +171,6 @@ class RQueueWrapper:
                         job = self.queue.fetch_job(ids[0])
                         res = job.result
                         job.delete()
-                        #if len(res) > 1:
-                        #    self.buffer.extend(res[1:])
-                        #    return res[0]
-                        #elif res:
                         return res
                     sleep(_sleep)
                     if deadline < monotonic():
@@ -198,10 +181,6 @@ class RQueueWrapper:
                 job = self.queue.fetch_job(ids[0])
                 res = job.result
                 job.delete()
-                #if len(res) > 1:
-                #    self.buffer.extend(res[1:])
-                #    return res[0]
-                #elif res:
                 return res
             raise Empty
 
