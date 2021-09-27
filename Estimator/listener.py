@@ -22,9 +22,11 @@ from redis import Redis
 import shelve
 
 
-def listener(host='redis', filename='/data/results.shelve'):
+def listener(host='redis', filename='/data/results.shelve', csv='/data/results.csv'):
     qin, qout = rq_launch(Redis(host=host))
     with shelve.open(filename) as w:
+        with open(csv, "w") as f:
+            f.write("index, smi, enegry_difference(Hartree), comments, time\n")
         while True:
             try:
                 data = qout.get()
@@ -33,9 +35,11 @@ def listener(host='redis', filename='/data/results.shelve'):
                 continue
             # print(data)
             w[str(data.index)] = data
+            with open(csv, "a") as f:
+                f.write(f"{data.index},{data.smi},{data.energy_dif},{data.comments},{data.time_s}\n")
 
 
 if __name__ == "__main__":
-    listener(host='redis', filename='/data/results.shelve')
+    listener(host='redis', filename='/data/results.shelve', csv='/data/results.csv')
 
 __all__ = ['listener']

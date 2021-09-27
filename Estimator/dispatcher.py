@@ -22,6 +22,7 @@ from redis import Redis
 import time
 import bigjson
 import shelve
+import argparse
 
 keys = ["smi", "crest_speed", "DFT_functional", "DFT_basis"]
 
@@ -45,7 +46,15 @@ def dispatcher(filename, host='redis', queued_tasks=100, queue_check_time=5, job
 
 
 if __name__ == "__main__":
-    dispatcher("/data/input.json")
+    parser = argparse.ArgumentParser(description='Dispatcher')
+    parser.add_argument('-i', '--input_file', type=str, default="/data/input.json",
+                        help="path to the json file with tasks")
+    parser.add_argument('-tl', '--time_limit', type=int, default=24*60,
+                        help='max time for the task in minutes')
+    parser.add_argument('-q', '--queue', type=int, default=100,
+                        help='max length of tasks queue')
+    args = parser.parse_args()
+    dispatcher(args.input_file, queued_tasks=args.queue, job_timeout=args.time_limit*60)
 
 
 __all__ = ["dispatcher"]

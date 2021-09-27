@@ -21,7 +21,7 @@ from collections import deque
 from multiprocessing import Process, Queue
 from queue import Empty
 from redis import Redis
-from rq import Queue as RQueue
+from rq import Queue as RQueue, timeouts as Rtimeout
 from time import sleep, monotonic
 from CGRtools import smiles
 from .utilities import best_conformers, FailReport
@@ -70,14 +70,14 @@ def run(index, smi=None, **kwargs):
             reactants = best_conformers(reaction.reactants, **kwargs)
             if not reactants:
                 return ReactionComponents(index, smi, None, None, None,
-                                          'anomaly terminated calculations for one of reactants', spent_time(start))
+                                          'anomaly terminated calculations for all of reactants', spent_time(start))
             elif any(isinstance(x, FailReport) for x in reactants):
                 return ReactionComponents(index, smi, reactants, None, None,
                                           'anomaly terminated calculations for one of reactants', spent_time(start))
             products = best_conformers(reaction.products, **kwargs)
             if not products:
                 ReactionComponents(index, smi, None, None, None,
-                                   'anomaly terminated calculations for one of products', spent_time(start))
+                                   'anomaly terminated calculations for all of products', spent_time(start))
             elif any(isinstance(x, FailReport) for x in products):
                 return ReactionComponents(index, smi, reactants, products, None,
                                           'anomaly terminated calculations for one of products', spent_time(start))
@@ -106,7 +106,11 @@ def worker(queue_in, queue_out):
 
 
 def rq_worker(index, **kwargs):
-    res = run(index, **kwargs)
+    try:
+        res = run(index, **kwargs)
+    except Rtimeout.JobTimeoutException:
+        return ReactionComponents(index, kwargs["smi"], None, None, None,
+                                  'terminated calculations due to timelimit', None)
     return res
 
 
@@ -142,6 +146,7 @@ class RQueueWrapper:
         self.queue = queue
         self.registry = queue.finished_job_registry
         self.buffer = deque()
+        self.failed = queue.failed_job_registry
 
     def qsize(self):
         """
@@ -152,37 +157,21 @@ class RQueueWrapper:
     def put(self, index, result_ttl=3600, job_timeout=3600, **kwargs):
         self.queue.enqueue(rq_worker, index, **kwargs, job_timeout=job_timeout, result_ttl=result_ttl)
 
-    def get(self, block=True, timeout=None, *, _sleep=2):
-        if block:
-            if timeout is None:
-                while True:
-                    ids = self.registry.get_job_ids(end=0)
-                    if ids:
-                        job = self.queue.fetch_job(ids[0])
-                        res = job.result
-                        job.delete()
-                        return res
-                    sleep(_sleep)
-            else:
-                deadline = monotonic() + timeout
-                while True:
-                    ids = self.registry.get_job_ids(end=0)
-                    if ids:
-                        job = self.queue.fetch_job(ids[0])
-                        res = job.result
-                        job.delete()
-                        return res
-                    sleep(_sleep)
-                    if deadline < monotonic():
-                        raise Empty
-        else:
+    def get(self, *, _sleep=2):
+        while True:
             ids = self.registry.get_job_ids(end=0)
+            idsf = self.failed.get_job_ids(end=0)
             if ids:
                 job = self.queue.fetch_job(ids[0])
                 res = job.result
                 job.delete()
                 return res
-            raise Empty
+            elif idsf:
+                job = self.queue.fetch_job(idsf[0])
+                res = job.result
+                job.delete()
+                return res
+            sleep(_sleep)
 
 
 __all__ = ['launch', 'rq_launch', 'ReactionComponents', 'run']

@@ -23,7 +23,7 @@ from setuptools import setup
 
 setup(
     name='Reaction Feasibility Estimator',
-    version='0.0.1',
+    version='0.0.2',
     packages=['Estimator'],
     url='https://github.com/timurgimadiev/estimator',
     license='GPLv3',

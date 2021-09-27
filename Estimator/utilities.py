@@ -38,7 +38,7 @@ def best_conformers(molecules, **kwargs):
     for n, mol in enumerate(molecules):
         tdir = Path(mkdtemp(prefix='calculation_'))
         tmp = best_conf(mol, tdir, **kwargs)
-        if dft:
+        if dft and isinstance(dft, str) and dft.lower() != 'none':
             tmp = refine_dft(mol, calc_result=tmp, tdir=tdir, **kwargs)
         rmtree(tdir)
         if tmp:
@@ -108,6 +108,7 @@ def best_conf(molecule, tdir, **kwargs):
         else:
             return FailReport(initial=molecule, log=None, step="CREST")
 
+
 def refine_dft(molecule, calc_result=None, **kwargs):
     dft = kwargs.get('dft', 'priroda')
     log = kwargs.get('log')
@@ -120,7 +121,7 @@ def refine_dft(molecule, calc_result=None, **kwargs):
         elif dft.lower() == 'pyscf':
             return refine_pyscf(charge, multiplicity, calc_result, tdir=tdir, log=log)
     else:
-        return FailReport(initial=calc_result, log="Not implemented procedure", step='dft')
+        return FailReport(initial=calc_result, log="Not implemented procedure or error in dft method name", step='dft')
 
 
 def refine_pyscf(charge, multiplicity, calc_result, tdir, log=None):

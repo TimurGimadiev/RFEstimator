@@ -2,7 +2,7 @@ FROM ubuntu:focal
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt update && apt install wget git openbabel build-essential libatlas-base-dev \
  gfortran cmake python3 python3-pip python3-gdbm -y
-RUN pip3 install -U pyscf[geomopt] git+https://github.com/stsouko/CGRtools.git@master#egg=CGRtools \
+RUN pip3 install -U pyscf[geomopt] cgrtools \
 redis rq bigjson pyberny
 RUN mkdir /data
 RUN cd /opt && git clone https://github.com/grimme-lab/xtb.git
